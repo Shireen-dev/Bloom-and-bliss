@@ -1,68 +1,77 @@
-const CART_KEY = "bloomAndBlissCart";
-
-function readCart() {
-  try {
-    const raw = localStorage.getItem(CART_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) { return []; }
+async function apiRequest(path, options = {}) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Request failed");
+  return data;
 }
 
-function writeCart(cart) {
-  localStorage.setItem(CART_KEY, JSON.stringify(cart));
-  updateCartCount();
-  renderCartDrawer();
+async function readCart() {
+  if (!getToken()) return [];
+  const data = await apiRequest("/cart");
+  return data.items.map((i) => ({ id: i.productId, qty: i.quantity }));
 }
 
-function addToCart(productId, qty = 1) {
-  const cart = readCart();
-  const existing = cart.find((item) => item.id === productId);
-  if (existing) existing.qty += qty;
-  else cart.push({ id: productId, qty });
-  writeCart(cart);
+async function addToCart(productId, qty = 1) {
+  if (!getToken()) {
+    window.location.href = "login.html?redirect=" + encodeURIComponent(window.location.pathname.split("/").pop());
+    return;
+  }
+  await apiRequest("/cart", { method: "POST", body: JSON.stringify({ productId, quantity: qty }) });
+  await updateCartCount();
+  await renderCartDrawer();
   openCartDrawer();
   flashCartToggle();
 }
 
-function removeFromCart(productId) {
-  writeCart(readCart().filter((item) => item.id !== productId));
+async function removeFromCart(productId) {
+  await apiRequest(`/cart/${productId}`, { method: "DELETE" });
+  await updateCartCount();
+  await renderCartDrawer();
 }
 
-function setCartQty(productId, qty) {
-  let cart = readCart();
-  if (qty <= 0) cart = cart.filter((item) => item.id !== productId);
-  else {
-    const existing = cart.find((item) => item.id === productId);
-    if (existing) existing.qty = qty;
-  }
-  writeCart(cart);
+async function setCartQty(productId, qty) {
+  await apiRequest(`/cart/${productId}`, { method: "PUT", body: JSON.stringify({ quantity: qty }) });
+  await updateCartCount();
+  await renderCartDrawer();
 }
 
-function cartTotalCount() {
-  return readCart().reduce((sum, item) => sum + item.qty, 0);
+async function cartTotalCount() {
+  const cart = await readCart();
+  return cart.reduce((sum, item) => sum + item.qty, 0);
 }
 
-function cartTotalPrice() {
-  return readCart().reduce((sum, item) => {
+async function cartTotalPrice() {
+  const cart = await readCart();
+  return cart.reduce((sum, item) => {
     const product = getProductById(item.id);
     return product ? sum + product.price * item.qty : sum;
   }, 0);
 }
 
-function updateCartCount() {
+async function updateCartCount() {
+  const count = await cartTotalCount();
   document.querySelectorAll("[data-cart-count]").forEach((el) => {
-    const count = cartTotalCount();
     el.textContent = count;
     el.classList.toggle("is-visible", count > 0);
   });
 }
 
-function renderCartDrawer() {
+async function renderCartDrawer() {
   const itemsEl = document.getElementById("cartItems");
   const totalEl = document.getElementById("cartTotal");
   const emptyEl = document.getElementById("cartEmpty");
   if (!itemsEl) return;
 
-  const cart = readCart();
+  const cart = await readCart();
+
   if (cart.length === 0) {
     itemsEl.innerHTML = "";
     if (emptyEl) emptyEl.hidden = false;
@@ -90,20 +99,22 @@ function renderCartDrawer() {
     </li>`;
   }).join("");
 
-  if (totalEl) totalEl.textContent = formatPrice(cartTotalPrice());
+  if (totalEl) totalEl.textContent = formatPrice(await cartTotalPrice());
 
   itemsEl.querySelectorAll("[data-qty-up]").forEach((btn) =>
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       const id = Number(btn.dataset.qtyUp);
-      const item = readCart().find((i) => i.id === id);
-      setCartQty(id, (item ? item.qty : 0) + 1);
+      const cart = await readCart();
+      const item = cart.find((i) => i.id === id);
+      await setCartQty(id, (item ? item.qty : 0) + 1);
     })
   );
   itemsEl.querySelectorAll("[data-qty-down]").forEach((btn) =>
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       const id = Number(btn.dataset.qtyDown);
-      const item = readCart().find((i) => i.id === id);
-      setCartQty(id, (item ? item.qty : 0) - 1);
+      const cart = await readCart();
+      const item = cart.find((i) => i.id === id);
+      await setCartQty(id, (item ? item.qty : 0) - 1);
     })
   );
   itemsEl.querySelectorAll("[data-remove]").forEach((btn) =>

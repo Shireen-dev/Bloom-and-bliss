@@ -74,20 +74,20 @@
   </div>
 </footer>
 
+<script src="js/config.js"></script>
 <script src="js/products.js"></script>
 <script src="js/cart.js"></script>
 <script src="js/auth.js"></script>
+<script src="js/main.js"></script>
 <script>
-  document.addEventListener("DOMContentLoaded", () => {
-  // Require login before checkout
+ document.addEventListener("DOMContentLoaded", async () => {
   if (!getCurrentUser()) {
     window.location.href = "login.html?redirect=checkout.html";
     return;
   }
-
   const summaryItems = document.getElementById("summaryItems");
   const summaryTotal = document.getElementById("summaryTotal");
-  const cart = readCart();
+  const cart = await readCart();
 
   if (cart.length === 0) {
     summaryItems.innerHTML = `<li>Your cart is empty. <a href="products.html">Go pick a bouquet</a>.</li>`;
@@ -98,20 +98,27 @@
       return `<li><span>${p.name} × ${item.qty}</span><span>${formatPrice(p.price * item.qty)}</span></li>`;
     }).join("");
   }
-  summaryTotal.textContent = formatPrice(cartTotalPrice());
+  summaryTotal.textContent = formatPrice(await cartTotalPrice());
 
-  document.getElementById("checkoutForm").addEventListener("submit", (e) => {
+  document.getElementById("checkoutForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (!getCurrentUser()) {
-      window.location.href = "login.html?redirect=checkout.html";
-      return;
+    const shipping = {
+      name: document.getElementById("shipName").value,
+      address: document.getElementById("shipAddress").value,
+      city: document.getElementById("shipCity").value,
+      zip: document.getElementById("shipZip").value,
+      phone: document.getElementById("shipPhone").value,
+    };
+    try {
+      const data = await apiRequest("/orders", { method: "POST", body: JSON.stringify({ shipping }) });
+      document.getElementById("orderNumber").textContent = "BB-" + data.order.id;
+      document.getElementById("checkoutView").hidden = true;
+      document.getElementById("confirmView").hidden = false;
+      await updateCartCount();
+    } catch (err) {
+      document.getElementById("checkoutError").textContent = err.message;
+      document.getElementById("checkoutError").hidden = false;
     }
-    if (readCart().length === 0) return;
-    const orderNum = "BB-" + Math.floor(100000 + Math.random() * 900000);
-    document.getElementById("orderNumber").textContent = orderNum;
-    writeCart([]);
-    document.getElementById("checkoutView").hidden = true;
-    document.getElementById("confirmView").hidden = false;
   });
 });
 </script>

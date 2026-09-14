@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="color-scheme" content="light">
-<title>Bouquet Details — Bloom & Bliss</title>
+<title>My Orders — Bloom & Bliss</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/styles.css">
@@ -19,72 +19,37 @@
     </button>
     <ul class="nav-links" id="navLinks">
       <li><a href="index.html">Home</a></li>
-      <li><a href="products.html" aria-current="page">Shop Bouquets</a></li>
-      <li><a href="index.html#about">About</a></li>
-      <li><a href="index.html#featured">Featured</a></li>
+      <li><a href="products.html">Shop Bouquets</a></li>
+      <li><a href="orders.html" aria-current="page">My Orders</a></li>
       <li><a href="orders.html">My Orders</a></li>
     </ul>
     <div class="nav-actions">
+      <span id="authSlot"></span>
       <button class="cart-toggle" id="cartToggle" aria-label="Open cart">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.4" fill="currentColor" stroke="none"/><circle cx="18" cy="20" r="1.4" fill="currentColor" stroke="none"/><path d="M2.5 3h2l2.2 12.2a2 2 0 0 0 2 1.65h8.1a2 2 0 0 0 1.97-1.63L20.5 7.5H6.1"/></svg>
         <span class="cart-count" id="cartCountBadge" data-cart-count>0</span>
       </button>
-      <a href="products.html" class="btn btn--outline btn--small">Back to Shop</a>
-      <span id="authSlot"></span>
     </div>
   </nav>
 </header>
 
 <main>
-  <nav class="breadcrumb container" aria-label="Breadcrumb">
-    <a href="index.html">Home</a> / <a href="products.html">Bouquets</a> / <span id="crumbName">Detail</span>
-  </nav>
-
-  <section class="detail">
-    <div class="container" id="productDetail"></div>
+  <section class="page-intro container">
+    <h1>My Orders</h1>
+    <p>Every order you've placed with Bloom &amp; Bliss, most recent first.</p>
   </section>
 
-  <section class="section related">
+  <section class="section" style="padding-top:0;">
     <div class="container">
-      <div class="section-head">
-        <div>
-          <h2>You might also like</h2>
-          <p>More from the same collection.</p>
-        </div>
-      </div>
-      <div class="bouquet-grid" id="relatedGrid"></div>
+      <div id="ordersList"></div>
     </div>
   </section>
 </main>
 
 <footer class="site-footer">
   <div class="container">
-    <div class="footer-grid">
-      <div>
-        <a href="index.html" class="logo">Bloom<span>&amp;</span>Bliss</a>
-        <p class="footer-about">A small-batch flower studio building hand-tied bouquets around real flower pairings — made for a college e-commerce project.</p>
-      </div>
-      <div class="footer-col">
-        <h4>Shop</h4>
-        <ul>
-          <li><a href="products.html">All Bouquets</a></li>
-          <li><a href="products.html">Romantic</a></li>
-          <li><a href="products.html">Bright</a></li>
-          <li><a href="products.html">Luxury</a></li>
-        </ul>
-      </div>
-      <div class="footer-col">
-        <h4>Studio</h4>
-        <ul>
-          <li><a href="index.html#about">About</a></li>
-          <li><a href="index.html#featured">Featured</a></li>
-          <li><a href="products.html">Contact</a></li>
-        </ul>
-      </div>
-    </div>
     <div class="footer-bottom">
       <span>&copy; 2026 Bloom &amp; Bliss. Student project — not a real store.</span>
-      <span>Made with care, one stem at a time.</span>
     </div>
   </div>
 </footer>
@@ -98,10 +63,10 @@
   <ul class="cart-drawer__items" id="cartItems"></ul>
   <p class="cart-empty" id="cartEmpty">Your cart is empty. Start with something beautiful.</p>
   <div class="cart-drawer__footer">
-  <div class="cart-drawer__total"><span>Total</span><span id="cartTotal">$0.00</span></div>
-  <a href="checkout.html" class="btn btn--primary btn--block" style="margin-bottom:10px;">Checkout</a>
-  <a href="products.html" class="btn btn--outline btn--block">Continue Browsing</a>
-</div>
+    <div class="cart-drawer__total"><span>Total</span><span id="cartTotal">$0.00</span></div>
+    <a href="checkout.html" class="btn btn--primary btn--block" style="margin-bottom:10px;">Checkout</a>
+    <a href="products.html" class="btn btn--outline btn--block">Continue Browsing</a>
+  </div>
 </aside>
 
 <script src="js/config.js"></script>
@@ -110,12 +75,40 @@
 <script src="js/auth.js"></script>
 <script src="js/main.js"></script>
 <script>
-  document.addEventListener("DOMContentLoaded", () => {
-    const params = new URLSearchParams(window.location.search);
-    const product = getProductById(params.get("id")) || PRODUCTS[0];
-    document.getElementById("crumbName").textContent = product.name;
+  document.addEventListener("DOMContentLoaded", async () => {
+    if (!getCurrentUser()) {
+      window.location.href = "login.html?redirect=orders.html";
+      return;
+    }
+    const listEl = document.getElementById("ordersList");
+    try {
+      const data = await apiRequest("/orders");
+      const orders = data.orders || [];
+      if (orders.length === 0) {
+        listEl.innerHTML = `<p>You haven't placed any orders yet. <a href="products.html">Go pick a bouquet</a>.</p>`;
+        return;
+      }
+      listEl.innerHTML = orders.map((order) => {
+        const items = (order.items || []).map((item) => {
+          const p = getProductById(item.productId);
+          const name = p ? p.name : `Product #${item.productId}`;
+          return `<li><span>${name} × ${item.quantity}</span><span>${formatPrice((p ? p.price : 0) * item.quantity)}</span></li>`;
+        }).join("");
+        const date = order.createdAt ? new Date(order.createdAt).toLocaleDateString() : "";
+        return `
+          <div class="order-summary" style="margin-bottom:24px;">
+            <div style="display:flex; justify-content:space-between; align-items:baseline;">
+              <h2 style="margin:0;">Order BB-${order.id}</h2>
+              <span style="color:var(--forest-light); font-size:0.9rem;">${date}</span>
+            </div>
+            <ul style="margin-top:14px;">${items}</ul>
+            <div class="order-total"><span>Total</span><span>${formatPrice(order.total || 0)}</span></div>
+          </div>`;
+      }).join("");
+    } catch (err) {
+      listEl.innerHTML = `<p>Could not load your orders: ${err.message}</p>`;
+    }
   });
 </script>
-<script src="js/auth.js"></script>
 </body>
 </html>

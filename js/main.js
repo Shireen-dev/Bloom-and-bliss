@@ -130,7 +130,8 @@ function renderProductDetail() {
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  await fetchProducts();
   initNavToggle();
   renderFeatured();
   renderProductGrid();

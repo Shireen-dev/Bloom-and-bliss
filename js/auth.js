@@ -1,23 +1,23 @@
+const TOKEN_KEY = "bloomAndBlissToken";
 const USER_KEY = "bloomAndBlissUser";
 
-function getCurrentUser() {
-  try {
-    const raw = localStorage.getItem(USER_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) { return null; }
+function getToken() {
+  return localStorage.getItem(TOKEN_KEY);
 }
-
-function setCurrentUser(user) {
+function getCurrentUser() {
+  const raw = localStorage.getItem(USER_KEY);
+  return raw ? JSON.parse(raw) : null;
+}
+function setSession(token, user) {
+  localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
-
 function logOut() {
+  localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   window.location.href = "index.html";
 }
 
-// Shows "Hi, Name" + Log out if signed in, otherwise a Login link.
-// Looks for a container with id="authSlot" in the nav.
 function renderAuthSlot() {
   const slot = document.getElementById("authSlot");
   if (!slot) return;
@@ -55,38 +55,48 @@ document.addEventListener("DOMContentLoaded", () => {
     signInForm.hidden = true;
   });
 
-  signInForm.addEventListener("submit", (e) => {
+  signInForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = document.getElementById("signInEmail").value.trim();
     const password = document.getElementById("signInPassword").value;
     const errorEl = document.getElementById("signInError");
-    const stored = JSON.parse(localStorage.getItem("bloomAndBlissAccounts") || "{}");
-    if (stored[email] && stored[email].password === password) {
-      setCurrentUser({ name: stored[email].name, email });
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Login failed");
+      setSession(data.token, data.user);
       const params = new URLSearchParams(window.location.search);
-window.location.href = params.get("redirect") || "index.html";
-    } else {
-      errorEl.textContent = "Email or password is incorrect, or no account exists yet — try Create Account.";
+      window.location.href = params.get("redirect") || "index.html";
+    } catch (err) {
+      errorEl.textContent = err.message;
       errorEl.hidden = false;
     }
   });
 
-  signUpForm.addEventListener("submit", (e) => {
+  signUpForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = document.getElementById("signUpName").value.trim();
     const email = document.getElementById("signUpEmail").value.trim();
     const password = document.getElementById("signUpPassword").value;
     const errorEl = document.getElementById("signUpError");
-    if (!name || !email || password.length < 6) {
-      errorEl.textContent = "Please fill every field (password needs 6+ characters).";
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Sign up failed");
+      setSession(data.token, data.user);
+      const params = new URLSearchParams(window.location.search);
+      window.location.href = params.get("redirect") || "index.html";
+    } catch (err) {
+      errorEl.textContent = err.message;
       errorEl.hidden = false;
-      return;
     }
-    const stored = JSON.parse(localStorage.getItem("bloomAndBlissAccounts") || "{}");
-    stored[email] = { name, password };
-    localStorage.setItem("bloomAndBlissAccounts", JSON.stringify(stored));
-    setCurrentUser({ name, email });
-   const params = new URLSearchParams(window.location.search);
-window.location.href = params.get("redirect") || "index.html";
   });
 });
